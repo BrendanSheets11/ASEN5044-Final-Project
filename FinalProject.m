@@ -159,6 +159,14 @@ dXdot_est = dx_vals(2,:);
 dYest = dx_vals(3,:);
 dYdot_est = dx_vals(4,:);
 
+
+% Finding average state errors
+Xpos_error = sum(abs(Xtrue-Xest'))/length(Xtrue)
+Ypos_error = sum(abs(Ytrue-Yest'))/length(Ytrue)
+Xvel_error = sum(abs(Xdot_true-Xdot_est'))/length(Xdot_true)
+Yvel_error = sum(abs(Ydot_true-Ydot_est'))/length(Ydot_true)
+
+
 figure(1)
 subplot(4,1,1)
 hold on
