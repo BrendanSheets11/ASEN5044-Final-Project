@@ -2,8 +2,6 @@ clear
 clc
 close all
 
-load('Rtrue.csv');
-
 %Define important constants
 r0 = 6678; %[km] nominal orbit radius
 mu = 398600; %[km^3/s^2] gravitational parameter
@@ -98,7 +96,6 @@ for k = 0:1400
     Gt = eAhat(1:4,5:6); %DT control affect matrix at time t
 
     dx = Ft*dx; %Update the state perturbation
-    
     
    
     %%%Calculate Linearized Measurements
@@ -338,8 +335,6 @@ for i = 1:12
     scatter(t_i,i*ones(length(t_i)),"^")
 
 end
-
-%}
 
 function Xdot = EOM(t,X)
     mu = 398600; %[km^3/s^2] gravitational parameter
