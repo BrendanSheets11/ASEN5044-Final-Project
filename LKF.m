@@ -2,6 +2,12 @@ clear
 clc
 close all
 
+load('Rtrue.csv');
+load('Qtrue.csv');
+load('orbitdeterm_finalproj_KFdata.mat');
+
+%HELLO
+
 %Define important constants
 r0 = 6678; %[km] nominal orbit radius
 mu = 398600; %[km^3/s^2] gravitational parameter
@@ -15,6 +21,13 @@ dx = [0;0.075;0;-0.021]; %initial state perturbation
 xnom0 = [r0;0;0;omega0*r0]; %initial nominal state
 x0 = xnom0+dx; %initial state
 
+%Initial values for LKF
+Q = zeros([4,4]);
+Q(2,2) = Qtrue(1,1); %dynamics noise covariance matrix
+Q(4,4) = Qtrue(2,2);
+P_plus = 100*eye(4); %initial state error covariance matrix
+dx_plus = xnom0;
+
 %%%Integrate non-linear EOM for true state values
 options = odeset('RelTol',1e-8,'AbsTol',1e-8);
 [t,x_true] = ode45(@(t,x) EOM(t,x),time,x0,options); 
@@ -22,6 +35,9 @@ Xtrue = x_true(:,1);
 Xdot_true = x_true(:,2);
 Ytrue = x_true(:,3);
 Ydot_true = x_true(:,4);
+
+dX_LKF = zeros([4,length(ydata)]);
+X_LKF = zeros([4,length(ydata)]);
 
 %calculate non-linear measurements based on non-linear true state
 meas = zeros([12,3,length(Xtrue)]); %stores list of all valid measurements for all ground stations over all time
@@ -53,7 +69,7 @@ dx_vals = zeros([4,1401]);
 x_vals = zeros([4,1401]);
 meas2 = zeros([12,3,length(Xtrue)]); %stores list of all valid linearized measurements for all ground stations over all time
 
-for k = 0:1400
+for k = 0:1399
 
     dx_vals(:,k+1) = dx; %add perturbation to array
 
@@ -68,6 +84,10 @@ for k = 0:1400
     xnom = [Xnom;Xnom_dot;Ynom;Ynom_dot]; %nominal state vector at current time
     x = xnom+dx; %linearized estimated state at current time
     x_vals(:,k+1) = x; %add state estimate to array
+
+    %store values of LKF stuff
+    dX_LKF(:,k+1) = dx_plus;
+    X_LKF(:,k+1) = dx_plus + xnom;
     
     %Calculate partial derivatives for dynamics jacobian evaluated on
     %nominal trajectory at the current time
@@ -94,32 +114,36 @@ for k = 0:1400
 
     Ft = eAhat(1:4,1:4); %DT state transition matrix at time t
     Gt = eAhat(1:4,5:6); %DT control affect matrix at time t
-
-    dx = Ft*dx; %Update the state perturbation
     
+    dx = Ft*dx; %Update the state perturbation
    
     %%%Calculate Linearized Measurements
+    Yk = ydata{k+2};
     
-    %Iterate Over Each Ground Station
-    for i = 1:12
+    if ~isempty(Yk)
 
-        ynom_i = h(i,xnom,t); %nominal measurement
+        indices = Yk(4,:);
+        H = zeros([3*length(indices),4]); %linearized measurement matrix
+        Y_vect = zeros([3*length(indices),1]);
+        R = zeros([3*length(indices),3*length(indices)]);
+
+        %Iterate Over Each Ground Station
+        for i = 1:length(indices)
+    
+            j = indices(i);
+    
+            yi = Yk(1:3,i);
+            Y_vect(3*i-2:3*i) = yi;
+            
+            theta_i_t = omega_E*t + (j-1)*pi/6; %[rad] angle of ground station i at time t
         
-        theta_i_t = omega_E*t + (i-1)*pi/6; %[rad] angle of ground station i at time t
-    
-        %calculate position and velocity of ground station i
-        Xis = RE*cos(theta_i_t);
-        Yis = RE*sin(theta_i_t);
-        Xis_dot = -omega_E*RE*sin(theta_i_t);
-        Yis_dot = omega_E*RE*cos(theta_i_t);
-    
-        theta_i = atan2(Yis,Xis);
-        angle_diff = theta_i - ynom_i(3); %all_true_angles(i,k+1); %use true phi value to calculate if station is observable
-        angle_diff = mod(angle_diff + pi,2*pi) - pi; %[rad] wrapped angle difference between two angles 
+            %calculate position and velocity of ground station i
+            Xis = RE*cos(theta_i_t);
+            Yis = RE*sin(theta_i_t);
+            Xis_dot = -omega_E*RE*sin(theta_i_t);
+            Yis_dot = omega_E*RE*cos(theta_i_t);
         
-        %store observations if angle difference is less than 90 degrees
-        if abs(angle_diff) < pi/2
-    
+       
             %Calculate Linearized Observation Matrix
             rho = sqrt((Xnom-Xis)^2+(Ynom-Yis)^2);
     
@@ -137,14 +161,25 @@ for k = 0:1400
             C_bar_i = [[drho_dx    0             drho_dy    0];
                        [drhodot_dx drhodot_dxdot drhodot_dy drhodot_dydot];
                        [dphi_dx    0             dphi_dy    0]];
-    
-            dy_i = C_bar_i*dx; %measurement perturbation
-
-            y_i = ynom_i + dy_i; %full linearized measurement prediction
-            y_i(3) = mod(y_i(3)+pi,2*pi)-pi;
-            meas2(i,:,k+1) = y_i;
+            H(3*i-2:3*i,:) = C_bar_i;
+            R(3*i-2:3*i,3*i-2:3*i) = Rtrue;
+            
         end
+    
+        %%%Time Update Step
+        dx_minus = Ft*dx_plus;
+        P_minus = Ft*P_plus*Ft' + Q;
+        K = P_minus*H'/(H*P_minus*H' + R);
+    
+        %%%Measurement Update Step
+        dx_plus = dx_minus + K*(Y_vect-H*dx_minus);
+        P_plus = (eye(4) - K*H)*P_minus;
+    else
+        %%%Time Update Step
+        dx_plus = Ft*dx_plus;
+        P_plus = Ft*P_plus*Ft' + Q;
     end
+
 end
 
 %extract estimated state values
@@ -166,7 +201,7 @@ Ypos_error = sum(abs(Ytrue-Yest'))/length(Ytrue);
 Xvel_error = sum(abs(Xdot_true-Xdot_est'))/length(Xdot_true);
 Yvel_error = sum(abs(Ydot_true-Ydot_est'))/length(Ydot_true);
 
-%{
+
 
 figure(1)
 subplot(4,1,1)
@@ -175,22 +210,27 @@ title("State vs. Time, Full Nonlinear Dynamics Simulation")
 xlabel("Time (secs)")
 ylabel("X (km)")
 plot(time,Xtrue);
+plot(time,dX_LKF(1,:));
 subplot(4,1,2)
 hold on
 xlabel("Time (secs)")
 ylabel("Xdot (km/s)")
 plot(time,Xdot_true);
+plot(time,dX_LKF(2,:));
 subplot(4,1,3)
 hold on
 xlabel("Time (secs)")
 ylabel("Y (km)")
 plot(time,Ytrue);
+plot(time,dX_LKF(3,:));
 subplot(4,1,4)
 hold on
 xlabel("Time (secs)")
 ylabel("Ydot (km/s)")
 plot(time,Ydot_true);
+plot(time,dX_LKF(4,:));
 
+%{
 %Plot true measurements
 figure(2)
 subplot(4,1,1)
@@ -335,6 +375,8 @@ for i = 1:12
     scatter(t_i,i*ones(length(t_i)),"^")
 
 end
+
+%}
 
 function Xdot = EOM(t,X)
     mu = 398600; %[km^3/s^2] gravitational parameter
