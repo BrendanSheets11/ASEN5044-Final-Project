@@ -4,6 +4,8 @@ close all
 
 load('Rtrue.csv');
 
+%HELLO
+
 %Define important constants
 r0 = 6678; %[km] nominal orbit radius
 mu = 398600; %[km^3/s^2] gravitational parameter
