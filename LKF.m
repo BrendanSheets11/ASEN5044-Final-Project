@@ -25,7 +25,10 @@ x0 = xnom0+dx; %initial state
 Q = zeros([4,4]);
 Q(2,2) = Qtrue(1,1); %dynamics noise covariance matrix
 Q(4,4) = Qtrue(2,2);
-P_plus = 100*eye(4); %initial state error covariance matrix
+P_plus = [[1e4 0 0 0];
+          [0 1e4 0 0];
+          [0 0 1e4 0];
+          [0 0 0 1e4]]; %initial state error covariance matrix
 dx_plus = xnom0;
 
 %%%Integrate non-linear EOM for true state values
@@ -210,25 +213,25 @@ title("State vs. Time, Full Nonlinear Dynamics Simulation")
 xlabel("Time (secs)")
 ylabel("X (km)")
 plot(time,Xtrue);
-plot(time,dX_LKF(1,:));
+plot(time,X_LKF(1,:));
 subplot(4,1,2)
 hold on
 xlabel("Time (secs)")
 ylabel("Xdot (km/s)")
 plot(time,Xdot_true);
-plot(time,dX_LKF(2,:));
+plot(time,X_LKF(2,:));
 subplot(4,1,3)
 hold on
 xlabel("Time (secs)")
 ylabel("Y (km)")
 plot(time,Ytrue);
-plot(time,dX_LKF(3,:));
+plot(time,X_LKF(3,:));
 subplot(4,1,4)
 hold on
 xlabel("Time (secs)")
 ylabel("Ydot (km/s)")
 plot(time,Ydot_true);
-plot(time,dX_LKF(4,:));
+plot(time,X_LKF(4,:));
 
 %{
 %Plot true measurements
@@ -303,6 +306,8 @@ xlabel("Time (secs)")
 ylabel("Ydot (km/s)")
 plot(time,Ydot_est);
 
+%}
+
 figure(4)
 subplot(4,1,1)
 hold on
@@ -310,22 +315,27 @@ title("Linearized Approximate Perturbations vs. Time")
 xlabel("Time (secs)")
 ylabel("\deltaX (km)")
 plot(time,dXest);
+plot(time,dX_LKF(1,:));
 subplot(4,1,2)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaXdot (km/s)")
 plot(time,dXdot_est);
+plot(time,dX_LKF(2,:));
 subplot(4,1,3)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaY (km)")
 plot(time,dYest);
+plot(time,dX_LKF(3,:));
 subplot(4,1,4)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaYdot (km/s)")
 plot(time,dYdot_est);
+plot(time,dX_LKF(4,:));
 
+%{
 %Plot estimated measurements
 figure(5)
 subplot(4,1,1)
