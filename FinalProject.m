@@ -6,7 +6,6 @@ load('Rtrue.csv');
 load('Qtrue.csv');
 load('orbitdeterm_finalproj_KFdata.mat');
 
-%HELLO
 
 %Define important constants
 Q = Qtrue; %dynamics noise covariance matrix
@@ -154,18 +153,7 @@ for k = 0:1400
 
             meas2(i,:,k+1) = y_i;
         end
-
     end
-
-    %%%Time Update Step
-    dx_minus = Ft*dx_plus;
-    P_minus = Ft*P_plus*Ft' + Q;
-    K = P_minus*H'/(H*P_minus*H' + Rtrue);
-
-    %%%Measurement Update Step
-    dx_plus = dx_minus + K*(Y-H*dx_minus);
-    P_plus = (eye(4) - K*H)*P_minus;
-
 end
 
 %extract estimated state values

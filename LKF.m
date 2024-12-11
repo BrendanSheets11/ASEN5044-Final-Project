@@ -1,5 +1,5 @@
 clear
-clc
+%clc
 close all
 
 load('Rtrue.csv');
@@ -7,6 +7,9 @@ load('Qtrue.csv');
 load('orbitdeterm_finalproj_KFdata.mat');
 
 %HELLO
+
+
+count=0;
 
 %Define important constants
 r0 = 6678; %[km] nominal orbit radius
@@ -22,14 +25,16 @@ xnom0 = [r0;0;0;omega0*r0]; %initial nominal state
 x0 = xnom0+dx; %initial state
 
 %Initial values for LKF
+Q_tuning = 1e2;
 Q = zeros([4,4]);
 Q(2,2) = Qtrue(1,1); %dynamics noise covariance matrix
 Q(4,4) = Qtrue(2,2);
-P_plus = [[1e4 0 0 0];
+Q = Q_tuning*Q;
+P_plus = 1*[[1e4 0 0 0];
           [0 1e4 0 0];
           [0 0 1e4 0];
           [0 0 0 1e4]]; %initial state error covariance matrix
-dx_plus = xnom0;
+dx_plus = dx;
 
 %%%Integrate non-linear EOM for true state values
 options = odeset('RelTol',1e-8,'AbsTol',1e-8);
@@ -135,6 +140,8 @@ for k = 0:1399
     
             j = indices(i);
     
+            ynom_i = h(j,xnom,t);
+
             yi = Yk(1:3,i);
             Y_vect(3*i-2:3*i) = yi;
             
@@ -181,6 +188,7 @@ for k = 0:1399
         %%%Time Update Step
         dx_plus = Ft*dx_plus;
         P_plus = Ft*P_plus*Ft' + Q;
+        count = count+1;
     end
 
 end
@@ -204,6 +212,11 @@ Ypos_error = sum(abs(Ytrue-Yest'))/length(Ytrue);
 Xvel_error = sum(abs(Xdot_true-Xdot_est'))/length(Xdot_true);
 Yvel_error = sum(abs(Ydot_true-Ydot_est'))/length(Ydot_true);
 
+% Average perturbation errors between perturbation est and LKF
+XLKF_error = sum(abs(Xtrue-X_LKF(1,:)'))/length(Xtrue)
+YLKF_error = sum(abs(Ytrue-X_LKF(3,:)'))/length(Ytrue)
+XdotLKF_error = sum(abs(Xdot_true-X_LKF(2,:)'))/length(Xdot_true)
+YdotLKF_error = sum(abs(Ydot_true-X_LKF(4,:)'))/length(Ydot_true)
 
 
 figure(1)
