@@ -331,10 +331,10 @@ subplot(4,1,2)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaXdot (km/s)")
-plot(time,true_dx_vals(2,:));
-plot(time,dX_LKF(2,:));
-plot(time,dX_LKF(2,:)+sigma_LKF(2,:));
-plot(time,dX_LKF(2,:)-sigma_LKF(2,:));
+plot(time(2:end),true_dx_vals(2,2:end));
+plot(time(2:end),dX_LKF(2,2:end));
+plot(time(2:end),dX_LKF(2,2:end)+sigma_LKF(2,2:end));
+plot(time(2:end),dX_LKF(2,2:end)-sigma_LKF(2,2:end));
 subplot(4,1,3)
 hold on
 xlabel("Time (secs)")
@@ -347,10 +347,11 @@ subplot(4,1,4)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaYdot (km/s)")
-plot(time,true_dx_vals(4,:));
-plot(time,dX_LKF(4,:));
-plot(time,dX_LKF(4,:)+sigma_LKF(4,:));
-plot(time,dX_LKF(4,:)-sigma_LKF(4,:));
+start = 3;
+plot(time(start:end),true_dx_vals(4,start:end));
+plot(time(start:end),dX_LKF(4,start:end));
+plot(time(start:end),dX_LKF(4,start:end)+sigma_LKF(4,start:end));
+plot(time(start:end),dX_LKF(4,start:end)-sigma_LKF(4,start:end));
 
 %{
 %Plot estimated measurements
