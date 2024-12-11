@@ -213,6 +213,12 @@ Ypos_error = sum(abs(Ytrue-Yest'))/length(Ytrue);
 Xvel_error = sum(abs(Xdot_true-Xdot_est'))/length(Xdot_true);
 Yvel_error = sum(abs(Ydot_true-Ydot_est'))/length(Ydot_true);
 
+% Average perturbation errors between perturbation est and LKF
+XLKF_error = sum(abs(Xtrue-X_LKF(1,:)'))/length(Xtrue)
+YLKF_error = sum(abs(Ytrue-X_LKF(3,:)'))/length(Ytrue)
+XdotLKF_error = sum(abs(Xdot_true-X_LKF(2,:)'))/length(Xdot_true)
+YdotLKF_error = sum(abs(Ydot_true-X_LKF(4,:)'))/length(Ydot_true)
+
 
 
 figure(1)
