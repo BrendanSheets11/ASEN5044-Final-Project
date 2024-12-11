@@ -157,14 +157,14 @@ for k = 0:1400
 
     end
 
-    %%%Time Update Step
-    dx_minus = Ft*dx_plus;
-    P_minus = Ft*P_plus*Ft' + Q;
-    K = P_minus*H'/(H*P_minus*H' + Rtrue);
-
-    %%%Measurement Update Step
-    dx_plus = dx_minus + K*(Y-H*dx_minus);
-    P_plus = (eye(4) - K*H)*P_minus;
+%     %%%Time Update Step
+%     dx_minus = Ft*dx_plus;
+%     P_minus = Ft*P_plus*Ft' + Q;
+%     K = P_minus*H'/(H*P_minus*H' + Rtrue);
+% 
+%     %%%Measurement Update Step
+%     dx_plus = dx_minus + K*(Y-H*dx_minus);
+%     P_plus = (eye(4) - K*H)*P_minus;
 
 end
 
@@ -283,6 +283,7 @@ hold on
 xlabel("Time (secs)")
 ylabel("Ydot (km/s)")
 plot(time,Ydot_est);
+%}
 
 figure(4)
 subplot(4,1,1)
@@ -306,7 +307,7 @@ hold on
 xlabel("Time (secs)")
 ylabel("\deltaYdot (km/s)")
 plot(time,dYdot_est);
-
+%{
 %Plot estimated measurements
 figure(5)
 subplot(4,1,1)

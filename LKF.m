@@ -25,11 +25,13 @@ x0 = xnom0+dx; %initial state
 Q = zeros([4,4]);
 Q(2,2) = Qtrue(1,1); %dynamics noise covariance matrix
 Q(4,4) = Qtrue(2,2);
-P_plus = [[1e4 0 0 0];
-          [0 1e4 0 0];
-          [0 0 1e4 0];
-          [0 0 0 1e4]]; %initial state error covariance matrix
-dx_plus = xnom0;
+Q = 100*Q;
+P_plus = 1e6*eye(4);
+% P_plus = [[1e4 0 0 0];
+%           [0 1e4 0 0];
+%           [0 0 1e4 0];
+%           [0 0 0 1e4]]; %initial state error covariance matrix
+dx_plus = dx;
 
 %%%Integrate non-linear EOM for true state values
 options = odeset('RelTol',1e-8,'AbsTol',1e-8);
@@ -41,6 +43,7 @@ Ydot_true = x_true(:,4);
 
 dX_LKF = zeros([4,length(ydata)]);
 X_LKF = zeros([4,length(ydata)]);
+sigma_LKF = zeros([4,length(ydata)]);
 
 %calculate non-linear measurements based on non-linear true state
 meas = zeros([12,3,length(Xtrue)]); %stores list of all valid measurements for all ground stations over all time
@@ -70,6 +73,7 @@ end
 %%%Use discrete time linearized dynamics to estimate state values over time
 dx_vals = zeros([4,1401]);
 x_vals = zeros([4,1401]);
+true_dx_vals = zeros([4,1401]);
 meas2 = zeros([12,3,length(Xtrue)]); %stores list of all valid linearized measurements for all ground stations over all time
 
 for k = 0:1399
@@ -87,10 +91,12 @@ for k = 0:1399
     xnom = [Xnom;Xnom_dot;Ynom;Ynom_dot]; %nominal state vector at current time
     x = xnom+dx; %linearized estimated state at current time
     x_vals(:,k+1) = x; %add state estimate to array
+    true_dx_vals(:,k+1) = x_true(k+1,:)'-xnom; %add state estimate to array
 
     %store values of LKF stuff
     dX_LKF(:,k+1) = dx_plus;
     X_LKF(:,k+1) = dx_plus + xnom;
+    sigma_LKF(:,k+1) = 2*sqrt(diag(P_plus));
     
     %Calculate partial derivatives for dynamics jacobian evaluated on
     %nominal trajectory at the current time
@@ -134,8 +140,11 @@ for k = 0:1399
         for i = 1:length(indices)
     
             j = indices(i);
+
+            ynom_i = h(j,xnom,t); %nominal measurement;
     
-            yi = Yk(1:3,i);
+            yi = Yk(1:3,i)-ynom_i;
+            
             Y_vect(3*i-2:3*i) = yi;
             
             theta_i_t = omega_E*t + (j-1)*pi/6; %[rad] angle of ground station i at time t
@@ -314,26 +323,34 @@ hold on
 title("Linearized Approximate Perturbations vs. Time")
 xlabel("Time (secs)")
 ylabel("\deltaX (km)")
-plot(time,dXest);
+plot(time,true_dx_vals(1,:));
 plot(time,dX_LKF(1,:));
+plot(time,dX_LKF(1,:)+sigma_LKF(1,:));
+plot(time,dX_LKF(1,:)-sigma_LKF(1,:));
 subplot(4,1,2)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaXdot (km/s)")
-plot(time,dXdot_est);
+plot(time,true_dx_vals(2,:));
 plot(time,dX_LKF(2,:));
+plot(time,dX_LKF(2,:)+sigma_LKF(2,:));
+plot(time,dX_LKF(2,:)-sigma_LKF(2,:));
 subplot(4,1,3)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaY (km)")
-plot(time,dYest);
+plot(time,true_dx_vals(3,:));
 plot(time,dX_LKF(3,:));
+plot(time,dX_LKF(3,:)+sigma_LKF(3,:));
+plot(time,dX_LKF(3,:)-sigma_LKF(3,:));
 subplot(4,1,4)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaYdot (km/s)")
-plot(time,dYdot_est);
+plot(time,true_dx_vals(4,:));
 plot(time,dX_LKF(4,:));
+plot(time,dX_LKF(4,:)+sigma_LKF(4,:));
+plot(time,dX_LKF(4,:)-sigma_LKF(4,:));
 
 %{
 %Plot estimated measurements
