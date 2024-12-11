@@ -6,8 +6,6 @@ load('Rtrue.csv');
 load('Qtrue.csv');
 load('orbitdeterm_finalproj_KFdata.mat');
 
-%HELLO
-
 %Define important constants
 r0 = 6678; %[km] nominal orbit radius
 mu = 398600; %[km^3/s^2] gravitational parameter
@@ -22,10 +20,10 @@ xnom0 = [r0;0;0;omega0*r0]; %initial nominal state
 x0 = xnom0+dx; %initial state
 
 %Initial values for LKF
-Q = zeros([4,4]);
-Q(2,2) = Qtrue(1,1); %dynamics noise covariance matrix
-Q(4,4) = Qtrue(2,2);
-Q = 100*Q;
+% Q = zeros([4,4]);
+% Q(2,2) = Qtrue(1,1); %dynamics noise covariance matrix
+% Q(4,4) = Qtrue(2,2);
+Q = Qtrue;
 P_plus = 1e6*eye(4);
 % P_plus = [[1e4 0 0 0];
 %           [0 1e4 0 0];
@@ -44,6 +42,9 @@ Ydot_true = x_true(:,4);
 dX_LKF = zeros([4,length(ydata)]);
 X_LKF = zeros([4,length(ydata)]);
 sigma_LKF = zeros([4,length(ydata)]);
+
+dyest = zeros([4,length(ydata)]);
+dytrue = zeros([4,length(ydata)]);
 
 %calculate non-linear measurements based on non-linear true state
 meas = zeros([12,3,length(Xtrue)]); %stores list of all valid measurements for all ground stations over all time
@@ -121,7 +122,8 @@ for k = 0:1399
     Ahat = [[A_bar, B_bar];[zeros([2,6])]];
     eAhat = expm(dt*Ahat);
 
-    Ft = eAhat(1:4,1:4); %DT state transition matrix at time t
+    Ft = eye(4)+dt*A_bar; %Ahat(1:4,1:4); %DT state transition matrix at time t
+    Omegat = dt*Gamma_bar;
     Gt = eAhat(1:4,5:6); %DT control affect matrix at time t
     
     dx = Ft*dx; %Update the state perturbation
@@ -135,19 +137,31 @@ for k = 0:1399
         H = zeros([3*length(indices),4]); %linearized measurement matrix
         Y_vect = zeros([3*length(indices),1]);
         R = zeros([3*length(indices),3*length(indices)]);
+        t_next = t+dt;
+
+        %Calculate nominal orbit state values at current time
+        Xnom = r0*cos(omega0*t_next);
+        Ynom = r0*sin(omega0*t_next);
+        Xnom_dot = -omega0*r0*sin(omega0*t_next);
+        Ynom_dot = omega0*r0*cos(omega0*t_next);
+
 
         %Iterate Over Each Ground Station
         for i = 1:length(indices)
     
             j = indices(i);
 
-            ynom_i = h(j,xnom,t); %nominal measurement;
+            ynom_i = h(j,xnom,t_next); %nominal measurement;
     
-            yi = Yk(1:3,i)-ynom_i;
+            dyi = Yk(1:3,i)-ynom_i;
+
+            if i == 1
+                dytrue(:,k+1) = [dyi;j];
+            end
             
-            Y_vect(3*i-2:3*i) = yi;
+            Y_vect(3*i-2:3*i) = dyi;
             
-            theta_i_t = omega_E*t + (j-1)*pi/6; %[rad] angle of ground station i at time t
+            theta_i_t = omega_E*t_next + (j-1)*pi/6; %[rad] angle of ground station i at time t
         
             %calculate position and velocity of ground station i
             Xis = RE*cos(theta_i_t);
@@ -174,22 +188,39 @@ for k = 0:1399
                        [drhodot_dx drhodot_dxdot drhodot_dy drhodot_dydot];
                        [dphi_dx    0             dphi_dy    0]];
             H(3*i-2:3*i,:) = C_bar_i;
-            R(3*i-2:3*i,3*i-2:3*i) = Rtrue;
+            R(3*i-2:3*i,3*i-2:3*i) = 1e7*Rtrue;
             
         end
-    
+        
+%         H = H(1:3,1:4);
+%         Y_vect = Y_vect(1:3);
+%         R =Rtrue;
+
         %%%Time Update Step
         dx_minus = Ft*dx_plus;
-        P_minus = Ft*P_plus*Ft' + Q;
+        P_minus = Ft*P_plus*Ft' + Omegat*Q*Omegat';
         K = P_minus*H'/(H*P_minus*H' + R);
+
+        
+        dyest(:,k+1) = [H(1:3,1:4)*dx_minus;indices(1)];
+        
     
         %%%Measurement Update Step
         dx_plus = dx_minus + K*(Y_vect-H*dx_minus);
         P_plus = (eye(4) - K*H)*P_minus;
+
+
+        %if k <= 21
+        disp("next")
+        disp(P_minus)
+        disp(P_plus)
+        disp(eye(4) - K*H)
+            
+        %end
     else
         %%%Time Update Step
         dx_plus = Ft*dx_plus;
-        P_plus = Ft*P_plus*Ft' + Q;
+        P_plus = Ft*P_plus*Ft' + Omegat*Q*Omegat';
     end
 
 end
@@ -323,41 +354,113 @@ plot(time,Ydot_est);
 
 %}
 
+% figure(4)
+% subplot(4,1,1)
+% hold on
+% title("Linearized Approximate Perturbations vs. Time")
+% xlabel("Time (secs)")
+% ylabel("\deltaX (km)")
+% plot(time,true_dx_vals(1,:));
+% plot(time,dX_LKF(1,:));
+% plot(time,dX_LKF(1,:)+sigma_LKF(1,:));
+% plot(time,dX_LKF(1,:)-sigma_LKF(1,:));
+% subplot(4,1,2)
+% hold on
+% xlabel("Time (secs)")
+% ylabel("\deltaXdot (km/s)")
+% start = 100;
+% % plot(time(start:end),true_dx_vals(2,start:end));
+% % plot(time(start:end),dX_LKF(2,start:end));
+% % plot(time(start:end),dX_LKF(2,start:end)+sigma_LKF(2,start:end));
+% % plot(time(start:end),dX_LKF(2,start:end)-sigma_LKF(2,start:end));
+% 
+% plot(time(start:end),true_dx_vals(2,start:end)-dX_LKF(2,start:end),"b");
+% plot(time(start:end),sigma_LKF(2,start:end),"r--");
+% plot(time(start:end),-sigma_LKF(2,start:end),"r--");
+% 
+% subplot(4,1,3)
+% hold on
+% xlabel("Time (secs)")
+% ylabel("\deltaY (km)")
+% plot(time,true_dx_vals(3,:));
+% plot(time,dX_LKF(3,:));
+% plot(time,dX_LKF(3,:)+sigma_LKF(3,:));
+% plot(time,dX_LKF(3,:)-sigma_LKF(3,:));
+% subplot(4,1,4)
+% hold on
+% xlabel("Time (secs)")
+% ylabel("\deltaYdot (km/s)")
+% 
+% plot(time(start:end),true_dx_vals(4,start:end));
+% plot(time(start:end),dX_LKF(4,start:end));
+% plot(time(start:end),dX_LKF(4,start:end)+sigma_LKF(4,start:end));
+% plot(time(start:end),dX_LKF(4,start:end)-sigma_LKF(4,start:end));
+
+start = 100;
+
 figure(4)
 subplot(4,1,1)
 hold on
 title("Linearized Approximate Perturbations vs. Time")
 xlabel("Time (secs)")
 ylabel("\deltaX (km)")
-plot(time,true_dx_vals(1,:));
-plot(time,dX_LKF(1,:));
-plot(time,dX_LKF(1,:)+sigma_LKF(1,:));
-plot(time,dX_LKF(1,:)-sigma_LKF(1,:));
+plot(time(start:end),true_dx_vals(1,start:end)-dX_LKF(1,start:end),"b");
+plot(time(start:end),sigma_LKF(1,start:end),"r--");
+plot(time(start:end),-sigma_LKF(1,start:end),"r--");
 subplot(4,1,2)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaXdot (km/s)")
-plot(time(2:end),true_dx_vals(2,2:end));
-plot(time(2:end),dX_LKF(2,2:end));
-plot(time(2:end),dX_LKF(2,2:end)+sigma_LKF(2,2:end));
-plot(time(2:end),dX_LKF(2,2:end)-sigma_LKF(2,2:end));
+
+plot(time(start:end),true_dx_vals(2,start:end)-dX_LKF(2,start:end),"b");
+plot(time(start:end),sigma_LKF(2,start:end),"r--");
+plot(time(start:end),-sigma_LKF(2,start:end),"r--");
+
 subplot(4,1,3)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaY (km)")
-plot(time,true_dx_vals(3,:));
-plot(time,dX_LKF(3,:));
-plot(time,dX_LKF(3,:)+sigma_LKF(3,:));
-plot(time,dX_LKF(3,:)-sigma_LKF(3,:));
+plot(time(start:end),true_dx_vals(3,start:end)-dX_LKF(3,start:end),"b");
+plot(time(start:end),sigma_LKF(3,start:end),"r--");
+plot(time(start:end),-sigma_LKF(3,start:end),"r--");
 subplot(4,1,4)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaYdot (km/s)")
-start = 3;
-plot(time(start:end),true_dx_vals(4,start:end));
-plot(time(start:end),dX_LKF(4,start:end));
-plot(time(start:end),dX_LKF(4,start:end)+sigma_LKF(4,start:end));
-plot(time(start:end),dX_LKF(4,start:end)-sigma_LKF(4,start:end));
+
+plot(time(start:end),true_dx_vals(4,start:end)-dX_LKF(4,start:end),"b");
+plot(time(start:end),sigma_LKF(4,start:end),"r--");
+plot(time(start:end),-sigma_LKF(4,start:end),"r--");
+
+figure()
+%Plot true measurements
+figure(2)
+subplot(4,1,1)
+hold on
+scatter(time,dyest(1,:))
+scatter(time,dytrue(1,:))
+title("Full Nonlinear Model Data Simulation")
+xlabel("Time (secs)")
+ylabel("\rho^i (km)")
+subplot(4,1,2)
+scatter(time,dyest(2,:))
+hold on
+scatter(time,dytrue(2,:))
+xlabel("Time (secs)")
+ylabel("$\dot{\rho}^i$ (km/s)",Interpreter="latex")
+subplot(4,1,3)
+scatter(time,dyest(3,:))
+hold on
+scatter(time,dytrue(3,:))
+xlabel("Time (secs)")
+ylabel("\phi^i (rads)")
+subplot(4,1,4)
+scatter(time,dyest(4,:))
+hold on
+scatter(time,dytrue(4,:))
+xlabel("Time (secs)")
+ylabel("Visible Station ID")
+
 
 %{
 %Plot estimated measurements
