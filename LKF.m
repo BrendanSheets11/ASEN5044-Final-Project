@@ -1,5 +1,5 @@
 clear
-clc
+%clc
 close all
 
 load('Rtrue.csv');
@@ -22,11 +22,12 @@ xnom0 = [r0;0;0;omega0*r0]; %initial nominal state
 x0 = xnom0+dx; %initial state
 
 %Initial values for LKF
+Q_tuning = 5e1;
 Q = zeros([4,4]);
 Q(2,2) = Qtrue(1,1); %dynamics noise covariance matrix
 Q(4,4) = Qtrue(2,2);
-Q = 100*Q;
-P_plus = 1e6*eye(4);
+Q = Q_tuning*Q;
+P_plus = 1e4*eye(4);
 % P_plus = [[1e4 0 0 0];
 %           [0 1e4 0 0];
 %           [0 0 1e4 0];
@@ -136,6 +137,12 @@ for k = 0:1399
         Y_vect = zeros([3*length(indices),1]);
         R = zeros([3*length(indices),3*length(indices)]);
 
+
+        if length(indices)>1
+            %disp(Yk)
+            %disp(k)
+        end
+
         %Iterate Over Each Ground Station
         for i = 1:length(indices)
     
@@ -147,7 +154,7 @@ for k = 0:1399
             
             Y_vect(3*i-2:3*i) = yi;
             
-            theta_i_t = omega_E*t + (j-1)*pi/6; %[rad] angle of ground station i at time t
+            theta_i_t = omega_E*t + (j-1)*(pi/6); %[rad] angle of ground station i at time t
         
             %calculate position and velocity of ground station i
             Xis = RE*cos(theta_i_t);
