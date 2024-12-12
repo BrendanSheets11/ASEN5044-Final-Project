@@ -1,5 +1,5 @@
 clear
-clc
+%clc
 close all
 
 load('Rtrue.csv');
@@ -20,15 +20,17 @@ xnom0 = [r0;0;0;omega0*r0]; %initial nominal state
 x0 = xnom0+dx; %initial state
 
 %Initial values for LKF
+Qtuning = 1e2;
+Ptuning = 1e-1;
 % Q = zeros([4,4]);
 % Q(2,2) = Qtrue(1,1); %dynamics noise covariance matrix
 % Q(4,4) = Qtrue(2,2);
-Q = Qtrue;
-P_plus = 1e6*eye(4);
-% P_plus = [[1e4 0 0 0];
-%           [0 1e4 0 0];
-%           [0 0 1e4 0];
-%           [0 0 0 1e4]]; %initial state error covariance matrix
+Q = Qtuning*Qtrue;
+%P_plus = 1e6*eye(4);
+P_plus = Ptuning*[[10 0 0 0];
+          [0 1 0 0];
+          [0 0 10 0];
+          [0 0 0 1]]; %initial state error covariance matrix
 dx_plus = dx;
 
 %%%Integrate non-linear EOM for true state values
@@ -39,9 +41,7 @@ Xdot_true = x_true(:,2);
 Ytrue = x_true(:,3);
 Ydot_true = x_true(:,4);
 
-dX_LKF = zeros([4,length(ydata)]);
-X_LKF = zeros([4,length(ydata)]);
-sigma_LKF = zeros([4,length(ydata)]);
+
 
 dyest = zeros([4,length(ydata)]);
 dytrue = zeros([4,length(ydata)]);
@@ -77,153 +77,24 @@ x_vals = zeros([4,1401]);
 true_dx_vals = zeros([4,1401]);
 meas2 = zeros([12,3,length(Xtrue)]); %stores list of all valid linearized measurements for all ground stations over all time
 
-for k = 0:1399
-
-    dx_vals(:,k+1) = dx; %add perturbation to array
-
-    t = dt*k; %[s] current time
-
-    %Calculate nominal orbit state values at current time
-    Xnom = r0*cos(omega0*t);
-    Ynom = r0*sin(omega0*t);
-    Xnom_dot = -omega0*r0*sin(omega0*t);
-    Ynom_dot = omega0*r0*cos(omega0*t);
-
-    xnom = [Xnom;Xnom_dot;Ynom;Ynom_dot]; %nominal state vector at current time
-    x = xnom+dx; %linearized estimated state at current time
-    x_vals(:,k+1) = x; %add state estimate to array
-    true_dx_vals(:,k+1) = x_true(k+1,:)'-xnom; %add state estimate to array
-
-    %store values of LKF stuff
-    dX_LKF(:,k+1) = dx_plus;
-    X_LKF(:,k+1) = dx_plus + xnom;
-    sigma_LKF(:,k+1) = 2*sqrt(diag(P_plus));
-    
-    %Calculate partial derivatives for dynamics jacobian evaluated on
-    %nominal trajectory at the current time
-    dxdot_dx = mu*(2*Xnom^2 - Ynom^2)/(r0^5);
-    dxdot_dy = 3*mu*Xnom*Ynom/(r0^5);
-    dydot_dy = mu*(2*Ynom^2 - Xnom^2)/(r0^5);
-    dydot_dx = dxdot_dy;
-    
-    %CT Perturbation Dynamics State transition matrix at current time
-    A_bar = [[0       1 0        0];
-            [dxdot_dx 0 dxdot_dy 0];
-            [0        0 0        1];
-            [dydot_dx 0 dydot_dy 0]];
-    
-    %CT Perturbation Control Affect matrix
-    B_bar = [[0 1 0 0]; [0 0 0 1]]';
-    
-    %CT Perturbation Disturbance Affect matrix
-    Gamma_bar = B_bar;
-
-    %%%Calculate DT Perturbation Dynamics Matrices
-    Ahat = [[A_bar, B_bar];[zeros([2,6])]];
-    eAhat = expm(dt*Ahat);
-
-    Ft = eye(4)+dt*A_bar; %Ahat(1:4,1:4); %DT state transition matrix at time t
-    Omegat = dt*Gamma_bar;
-    Gt = eAhat(1:4,5:6); %DT control affect matrix at time t
-    
-    dx = Ft*dx; %Update the state perturbation
-   
-    %%%Calculate Linearized Measurements
-    Yk = ydata{k+2};
-    
-    if ~isempty(Yk)
-
-        indices = Yk(4,:);
-        H = zeros([3*length(indices),4]); %linearized measurement matrix
-        Y_vect = zeros([3*length(indices),1]);
-        R = zeros([3*length(indices),3*length(indices)]);
-        t_next = t+dt;
-
-        %Calculate nominal orbit state values at current time
-        Xnom = r0*cos(omega0*t_next);
-        Ynom = r0*sin(omega0*t_next);
-        Xnom_dot = -omega0*r0*sin(omega0*t_next);
-        Ynom_dot = omega0*r0*cos(omega0*t_next);
 
 
-        %Iterate Over Each Ground Station
-        for i = 1:length(indices)
-    
-            j = indices(i);
+%% NEES/NIS Testing
+Eps_x = zeros(length(x_true)-1,1);
+Eps_bar_x = zeros(length(x_true)-1,1);
 
-            ynom_i = h(j,xnom,t_next); %nominal measurement;
-    
-            dyi = Yk(1:3,i)-ynom_i;
-
-            if i == 1
-                dytrue(:,k+1) = [dyi;j];
-            end
-            
-            Y_vect(3*i-2:3*i) = dyi;
-            
-            theta_i_t = omega_E*t_next + (j-1)*pi/6; %[rad] angle of ground station i at time t
-        
-            %calculate position and velocity of ground station i
-            Xis = RE*cos(theta_i_t);
-            Yis = RE*sin(theta_i_t);
-            Xis_dot = -omega_E*RE*sin(theta_i_t);
-            Yis_dot = omega_E*RE*cos(theta_i_t);
-        
-       
-            %Calculate Linearized Observation Matrix
-            rho = sqrt((Xnom-Xis)^2+(Ynom-Yis)^2);
-    
-            drho_dx = (Xnom-Xis)/rho;
-            drho_dy = (Ynom-Yis)/rho;
-            
-            drhodot_dx = (Ynom-Yis)*((Xnom_dot-Xis_dot)*(Ynom-Yis) - (Xnom-Xis)*(Ynom_dot-Yis_dot))/rho^3;
-            drhodot_dy = (Xnom-Xis)*((Xnom-Xis)*(Ynom_dot-Yis_dot) - (Xnom_dot-Xis_dot)*(Ynom-Yis))/rho^3;
-            drhodot_dxdot = (Xnom-Xis)/rho;
-            drhodot_dydot = (Ynom-Yis)/rho;
-    
-            dphi_dx = (Yis-Ynom)/rho^2;
-            dphi_dy = (Xnom-Xis)/rho^2;
-            
-            C_bar_i = [[drho_dx    0             drho_dy    0];
-                       [drhodot_dx drhodot_dxdot drhodot_dy drhodot_dydot];
-                       [dphi_dx    0             dphi_dy    0]];
-            H(3*i-2:3*i,:) = C_bar_i;
-            R(3*i-2:3*i,3*i-2:3*i) = 1e7*Rtrue;
-            
-        end
-        
-%         H = H(1:3,1:4);
-%         Y_vect = Y_vect(1:3);
-%         R =Rtrue;
-
-        %%%Time Update Step
-        dx_minus = Ft*dx_plus;
-        P_minus = Ft*P_plus*Ft' + Omegat*Q*Omegat';
-        K = P_minus*H'/(H*P_minus*H' + R);
-
-        
-        dyest(:,k+1) = [H(1:3,1:4)*dx_minus;indices(1)];
-        
-    
-        %%%Measurement Update Step
-        dx_plus = dx_minus + K*(Y_vect-H*dx_minus);
-        P_plus = (eye(4) - K*H)*P_minus;
-
-
-        %if k <= 21
-        disp("next")
-        disp(P_minus)
-        disp(P_plus)
-        disp(eye(4) - K*H)
-            
-        %end
-    else
-        %%%Time Update Step
-        dx_plus = Ft*dx_plus;
-        P_plus = Ft*P_plus*Ft' + Omegat*Q*Omegat';
+for N=1:50
+    [dX_LKF, X_LKF, sigma_LKF,P_k] = LKFfunc(ydata,Q,Rtrue,P_plus,dx);
+    %e_x = X_sim - X_LKF
+    e_x = x_true' - X_LKF;
+    for i=1:length(e_x)-1
+        Eps_x(i) = e_x(:,i)'*((P_k)\e_x(:,i));
+        Eps_bar_x(i) = Eps_x(i)+Eps_bar_x(i);
     end
-
+    
 end
+Eps_bar_x = Eps_bar_x/N;
+Eps_bar_x_avg = sum(Eps_bar_x)/length(Eps_bar_x)
 
 %extract estimated state values
 Xest = x_vals(1,:);
@@ -245,10 +116,10 @@ Xvel_error = sum(abs(Xdot_true-Xdot_est'))/length(Xdot_true);
 Yvel_error = sum(abs(Ydot_true-Ydot_est'))/length(Ydot_true);
 
 % Average perturbation errors between perturbation est and LKF
-XLKF_error = sum(abs(Xtrue-X_LKF(1,:)'))/length(Xtrue)
-YLKF_error = sum(abs(Ytrue-X_LKF(3,:)'))/length(Ytrue)
-XdotLKF_error = sum(abs(Xdot_true-X_LKF(2,:)'))/length(Xdot_true)
-YdotLKF_error = sum(abs(Ydot_true-X_LKF(4,:)'))/length(Ydot_true)
+% XLKF_error = sum(abs(Xtrue-X_LKF(1,:)'))/length(Xtrue)
+% YLKF_error = sum(abs(Ytrue-X_LKF(3,:)'))/length(Ytrue)
+% XdotLKF_error = sum(abs(Xdot_true-X_LKF(2,:)'))/length(Xdot_true)
+% YdotLKF_error = sum(abs(Ydot_true-X_LKF(4,:)'))/length(Ydot_true)
 
 
 
@@ -260,24 +131,32 @@ xlabel("Time (secs)")
 ylabel("X (km)")
 plot(time,Xtrue);
 plot(time,X_LKF(1,:));
+plot(time,X_LKF(1,:)+sigma_LKF(1,:),"r--");
+plot(time,X_LKF(1,:)-sigma_LKF(1,:),"r--");
 subplot(4,1,2)
 hold on
 xlabel("Time (secs)")
 ylabel("Xdot (km/s)")
 plot(time,Xdot_true);
 plot(time,X_LKF(2,:));
+plot(time,X_LKF(2,:)+sigma_LKF(2,:),"r--");
+plot(time,X_LKF(2,:)-sigma_LKF(2,:),"r--");
 subplot(4,1,3)
 hold on
 xlabel("Time (secs)")
 ylabel("Y (km)")
 plot(time,Ytrue);
 plot(time,X_LKF(3,:));
+plot(time,X_LKF(3,:)+sigma_LKF(3,:),"r--");
+plot(time,X_LKF(3,:)-sigma_LKF(3,:),"r--");
 subplot(4,1,4)
 hold on
 xlabel("Time (secs)")
 ylabel("Ydot (km/s)")
 plot(time,Ydot_true);
 plot(time,X_LKF(4,:));
+plot(time,X_LKF(4,:)+sigma_LKF(4,:),"r--");
+plot(time,X_LKF(4,:)-sigma_LKF(4,:),"r--");
 
 %{
 %Plot true measurements
@@ -411,7 +290,6 @@ subplot(4,1,2)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaXdot (km/s)")
-
 plot(time(start:end),true_dx_vals(2,start:end)-dX_LKF(2,start:end),"b");
 plot(time(start:end),sigma_LKF(2,start:end),"r--");
 plot(time(start:end),-sigma_LKF(2,start:end),"r--");
@@ -427,39 +305,38 @@ subplot(4,1,4)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaYdot (km/s)")
-
 plot(time(start:end),true_dx_vals(4,start:end)-dX_LKF(4,start:end),"b");
 plot(time(start:end),sigma_LKF(4,start:end),"r--");
 plot(time(start:end),-sigma_LKF(4,start:end),"r--");
 
-figure()
-%Plot true measurements
-figure(2)
-subplot(4,1,1)
-hold on
-scatter(time,dyest(1,:))
-scatter(time,dytrue(1,:))
-title("Full Nonlinear Model Data Simulation")
-xlabel("Time (secs)")
-ylabel("\rho^i (km)")
-subplot(4,1,2)
-scatter(time,dyest(2,:))
-hold on
-scatter(time,dytrue(2,:))
-xlabel("Time (secs)")
-ylabel("$\dot{\rho}^i$ (km/s)",Interpreter="latex")
-subplot(4,1,3)
-scatter(time,dyest(3,:))
-hold on
-scatter(time,dytrue(3,:))
-xlabel("Time (secs)")
-ylabel("\phi^i (rads)")
-subplot(4,1,4)
-scatter(time,dyest(4,:))
-hold on
-scatter(time,dytrue(4,:))
-xlabel("Time (secs)")
-ylabel("Visible Station ID")
+% figure()
+% %Plot true measurements
+% figure(2)
+% subplot(4,1,1)
+% hold on
+% scatter(time,dyest(1,:))
+% scatter(time,dytrue(1,:))
+% title("Full Nonlinear Model Data Simulation")
+% xlabel("Time (secs)")
+% ylabel("\rho^i (km)")
+% subplot(4,1,2)
+% scatter(time,dyest(2,:))
+% hold on
+% scatter(time,dytrue(2,:))
+% xlabel("Time (secs)")
+% ylabel("$\dot{\rho}^i$ (km/s)",Interpreter="latex")
+% subplot(4,1,3)
+% scatter(time,dyest(3,:))
+% hold on
+% scatter(time,dytrue(3,:))
+% xlabel("Time (secs)")
+% ylabel("\phi^i (rads)")
+% subplot(4,1,4)
+% scatter(time,dyest(4,:))
+% hold on
+% scatter(time,dytrue(4,:))
+% xlabel("Time (secs)")
+% ylabel("Visible Station ID")
 
 
 %{
