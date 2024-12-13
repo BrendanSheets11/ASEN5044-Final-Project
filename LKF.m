@@ -20,7 +20,7 @@ xnom0 = [r0;0;0;omega0*r0]; %initial nominal state
 x0 = xnom0+dx; %initial state
 
 %Initial values for LKF
-Qtuning = 1e2;
+Qtuning = 1;
 Ptuning = 1e-1;
 % Q = zeros([4,4]);
 % Q(2,2) = Qtrue(1,1); %dynamics noise covariance matrix
@@ -28,9 +28,9 @@ Ptuning = 1e-1;
 Q = Qtuning*Qtrue;
 %P_plus = 1e6*eye(4);
 P_plus = Ptuning*[[10 0 0 0];
-          [0 1 0 0];
-          [0 0 10 0];
-          [0 0 0 1]]; %initial state error covariance matrix
+                 [0 1 0 0];
+                 [0 0 10 0];
+                 [0 0 0 1]]; %initial state error covariance matrix
 dx_plus = dx;
 
 %%%Integrate non-linear EOM for true state values
@@ -80,21 +80,44 @@ meas2 = zeros([12,3,length(Xtrue)]); %stores list of all valid linearized measur
 
 
 %% NEES/NIS Testing
-Eps_x = zeros(length(x_true)-1,1);
-Eps_bar_x = zeros(length(x_true)-1,1);
 
-for N=1:50
-    [dX_LKF, X_LKF, sigma_LKF,P_k] = LKFfunc(ydata,Q,Rtrue,P_plus,dx);
-    %e_x = X_sim - X_LKF
-    e_x = x_true' - X_LKF;
-    for i=1:length(e_x)-1
-        Eps_x(i) = e_x(:,i)'*((P_k)\e_x(:,i));
-        Eps_bar_x(i) = Eps_x(i)+Eps_bar_x(i);
-    end
+alpha=0.05;
+tuner = logspace(-5,5,20);
+for j=1:length(tuner)
     
+    Q = tuner(j);
+
+    Eps_x = zeros(length(x_true)-1,1);
+    Eps_bar_x = zeros(length(x_true)-1,1);
+    
+    for N=1:30
+        [dX_LKF, X_LKF, sigma_LKF,P_k] = LKFfunc(ydata,Q,Rtrue,P_plus,dx);
+        %e_x = X_sim - X_LKF
+        e_x = x_true' - X_LKF;
+        for i=1:length(e_x)-1
+            Eps_x(i) = e_x(:,i)'*((P_k)\e_x(:,i));
+            Eps_bar_x(i) = Eps_x(i)+Eps_bar_x(i);
+        end
+        
+    end
+    Eps_bar_x = Eps_bar_x/N;
+    Eps_bar_x_avg = sum(Eps_bar_x)/length(Eps_bar_x);
+    
+    Eps_Q_test(j) = Eps_bar_x_avg;
+
+    r1 = chi2inv(alpha/2,N*4)./N;
+    r2 = chi2inv(1-alpha/2,N*4)./N;
+    
+    if (N*Eps_bar_x_avg >= r1*N) && (N*Eps_bar_x_avg <= r2*N)
+        disp("KF passes chi-square test for Q:")
+        disp(Q)
+    end
 end
-Eps_bar_x = Eps_bar_x/N;
-Eps_bar_x_avg = sum(Eps_bar_x)/length(Eps_bar_x)
+
+
+
+
+
 
 %extract estimated state values
 Xest = x_vals(1,:);
