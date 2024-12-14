@@ -20,7 +20,8 @@ xnom0 = [r0;0;0;omega0*r0]; %initial nominal state
 x0 = xnom0+dx; %initial state
 
 %Initial values for LKF
-Q = 1000*Qtrue;
+Q = 1000*Qtrue; %1000 works good
+R = 1e9*Rtrue; %1e9 works good
 %Q = 0*Qtrue;
 
 P_plus=10*[[1 0 0 0];
@@ -38,18 +39,18 @@ Xtrue = x_true(1,:);
 Xdot_true = x_true(2,:);
 Ytrue = x_true(3,:);
 Ydot_true = x_true(4,:);
-true_dx_vals = zeros([4,1401]);
-dytrue = zeros([4,length(ydata)]);
+true_dx_vals = zeros([4,num_points]);
+dytrue = zeros([4,num_points]);
 
-dX_LKF = zeros([4,length(ydata)]);
-X_LKF = zeros([4,length(ydata)]);
-sigma_LKF = zeros([4,length(ydata)]);
-dyest = zeros([4,length(ydata)]);
+dX_LKF = zeros([4,num_points]);
+X_LKF = zeros([4,num_points]);
+sigma_LKF = zeros([4,num_points]);
+dyest = zeros([4,num_points]);
 
 
 %%%Use discrete time linearized dynamics to estimate state values over time
 
-for k = 0:1399
+for k = 0:1400
 
     t = dt*k; %[s] current time
 
@@ -95,7 +96,7 @@ for k = 0:1399
         indices = Yk(4,:);
         H = zeros([3*length(indices),4]); %linearized measurement matrix
         Y_vect = zeros([3*length(indices),1]);
-        R = zeros([3*length(indices),3*length(indices)]);
+        Rk = zeros([3*length(indices),3*length(indices)]);
         t_next = t+dt;
 
         %Calculate nominal orbit state values at current time
@@ -147,7 +148,7 @@ for k = 0:1399
                        [drhodot_dx drhodot_dxdot drhodot_dy drhodot_dydot];
                        [dphi_dx    0             dphi_dy    0]];
             H(3*i-2:3*i,:) = C_bar_i;
-            R(3*i-2:3*i,3*i-2:3*i) = 1e9*Rtrue;
+            Rk(3*i-2:3*i,3*i-2:3*i) = R;
             
         end
         
@@ -155,7 +156,7 @@ for k = 0:1399
         %%%Time Update Step
         dx_minus = Ft*dx_plus;
         P_minus = Ft*P_plus*Ft' + Omegat*Q*Omegat';
-        K = P_minus*H'/(H*P_minus*H' + R);
+        K = P_minus*H'/(H*P_minus*H' + Rk);
 
     
         %%%Measurement Update Step
@@ -173,7 +174,71 @@ for k = 0:1399
 
 end
 
-true_dx_vals(:,1)
+%true_dx_vals(:,1)
+% disp(true_dx_vals(:,end))
+% disp(dX_LKF(:,end))
+% e = x_true(:,end)-X_LKF(:,end)
+% P_plus\e
+% epsilon_end = e'*(P_plus\e)
+
+%% NEES/NIS Testing
+load('Rtrue.csv');
+load('Qtrue.csv');
+
+R = 1e9*Rtrue;
+P_plus = 10*[[1 0 0 0];
+            [0 0.001 0 0];
+            [0 0 1 0];
+            [0 0 0 0.001]]; %initial state error covariance matrix
+
+alpha=0.05;
+tuner = 1000;%logspace(-5,5,20);
+
+
+Eps_x = zeros(length(x_true)-1,1);
+Eps_bar_x = zeros(length(x_true)-1,1);
+
+[~, ~, ~,Pk_LKF] = LKFfunc(ydata,Q,R,P_plus,dx_plus);
+e_x = x_true - X_LKF;
+
+for i=1:length(e_x)-1
+    P_k = Pk_LKF(:,4*k-3:4*k);
+    %Eps_x(i) = e_x(:,i)'*((diag(sigma_LKF(:,k)).^2)\e_x(:,i));
+    Eps_x(i) = e_x(:,i)'*((P_k)\e_x(:,i));
+    Eps_bar_x(i) = Eps_x(i)+Eps_bar_x(i);
+end
+
+
+r1 = chi2inv(alpha/2,4);
+r2 = chi2inv(1-alpha/2,4);
+
+num_passes = 0;
+
+for Eps_barx_k = Eps_bar_x'
+    if (Eps_barx_k >= r1) && (Eps_barx_k <= r2)
+        num_passes = num_passes+1;
+    end
+end
+
+average_epsilon = sum(Eps_bar_x)/length(Eps_bar_x)
+proportion_failed = 1 - num_passes/num_points
+
+if proportion_failed < alpha
+    disp("KF passes chi-square test for Q:")
+    disp(Q)
+end
+
+figure(3)
+hold on
+plot(Eps_bar_x,"bo")
+plot(r1*ones(size(Eps_bar_x)),"b--")
+plot(r2*ones(size(Eps_bar_x)),"b--")
+
+%     if (N*Eps_bar_x_avg >= r1*N) && (N*Eps_bar_x_avg <= r2*N)
+%         disp("KF passes chi-square test for Q:")
+%         disp(Q)
+%     end
+
 
 % Average perturbation errors between perturbation est and LKF
 XLKF_error = sum(abs(Xtrue-X_LKF(1,:)))/length(Xtrue)
@@ -290,7 +355,7 @@ ylabel("Ydot (km/s)")
 plot(time,Ydot_est);
 
 %}
-start = 100;
+start = 1;
 figure(4)
 subplot(4,1,1)
 hold on
@@ -330,41 +395,40 @@ plot(time(start:end),dX_LKF(4,start:end)-sigma_LKF(4,start:end),"r--");
 
 % start = 100;
 % 
-% figure(4)
-% subplot(4,1,1)
-% hold on
-% title("Approximate Perturbation Errors vs. Time")
-% xlabel("Time (secs)")
-% ylabel("\deltaX (km)")
-% plot(time(start:end),true_dx_vals(1,start:end)-dX_LKF(1,start:end),"b");
-% plot(time(start:end),sigma_LKF(1,start:end),"r--");
-% plot(time(start:end),-sigma_LKF(1,start:end),"r--");
-% subplot(4,1,2)
-% hold on
-% xlabel("Time (secs)")
-% ylabel("\deltaXdot (km/s)")
-% 
-% plot(time(start:end),true_dx_vals(2,start:end)-dX_LKF(2,start:end),"b");
-% plot(time(start:end),sigma_LKF(2,start:end),"r--");
-% plot(time(start:end),-sigma_LKF(2,start:end),"r--");
-% 
-% subplot(4,1,3)
-% hold on
-% xlabel("Time (secs)")
-% ylabel("\deltaY (km)")
-% plot(time(start:end),true_dx_vals(3,start:end)-dX_LKF(3,start:end),"b");
-% plot(time(start:end),sigma_LKF(3,start:end),"r--");
-% plot(time(start:end),-sigma_LKF(3,start:end),"r--");
-% subplot(4,1,4)
-% hold on
-% xlabel("Time (secs)")
-% ylabel("\deltaYdot (km/s)")
-% 
-% plot(time(start:end),true_dx_vals(4,start:end)-dX_LKF(4,start:end),"b");
-% plot(time(start:end),sigma_LKF(4,start:end),"r--");
-% plot(time(start:end),-sigma_LKF(4,start:end),"r--");
+figure(5)
+subplot(4,1,1)
+hold on
+title("Approximate Perturbation Errors vs. Time")
+xlabel("Time (secs)")
+ylabel("\deltaX (km)")
+plot(time(start:end),true_dx_vals(1,start:end)-dX_LKF(1,start:end),"b");
+plot(time(start:end),sigma_LKF(1,start:end),"r--");
+plot(time(start:end),-sigma_LKF(1,start:end),"r--");
+subplot(4,1,2)
+hold on
+xlabel("Time (secs)")
+ylabel("\deltaXdot (km/s)")
 
-figure()
+plot(time(start:end),true_dx_vals(2,start:end)-dX_LKF(2,start:end),"b");
+plot(time(start:end),sigma_LKF(2,start:end),"r--");
+plot(time(start:end),-sigma_LKF(2,start:end),"r--");
+
+subplot(4,1,3)
+hold on
+xlabel("Time (secs)")
+ylabel("\deltaY (km)")
+plot(time(start:end),true_dx_vals(3,start:end)-dX_LKF(3,start:end),"b");
+plot(time(start:end),sigma_LKF(3,start:end),"r--");
+plot(time(start:end),-sigma_LKF(3,start:end),"r--");
+subplot(4,1,4)
+hold on
+xlabel("Time (secs)")
+ylabel("\deltaYdot (km/s)")
+
+plot(time(start:end),true_dx_vals(4,start:end)-dX_LKF(4,start:end),"b");
+plot(time(start:end),sigma_LKF(4,start:end),"r--");
+plot(time(start:end),-sigma_LKF(4,start:end),"r--");
+
 %Plot true measurements
 figure(2)
 subplot(4,1,1)
@@ -499,7 +563,7 @@ function [X_sim,Y_sim] = SimulateData(Qtrue,Rtrue,P0,Xnom0,dt,num_points)
    cholP = chol(P0,"lower");
    noisy_state = cholP*randn([4,1]) + Xnom0;
    X_sim = zeros([4,num_points]);
-   Y_sim = cell(1,num_points);
+   Y_sim = cell(1,num_points+1);
 
    cholQ = chol(Qtrue,"lower");
    cholR = chol(Rtrue,"lower");
@@ -536,12 +600,23 @@ function [X_sim,Y_sim] = SimulateData(Qtrue,Rtrue,P0,Xnom0,dt,num_points)
         %save next state
         noisy_state = trajectory(end,:);
    end
-end
 
-function Xdot = EOM(t,X)
-    mu = 398600; %[km^3/s^2] gravitational parameter
-    r = sqrt(X(1)^2+X(3)^2);
-    Xdot = [X(2); -mu*X(1)/r^3; X(4); -mu*X(3)/r^3];
+   %generate final state measurement
+   true_meas = all_measurements(noisy_state,dt*(num_points+1));
+    
+   if ~isempty(true_meas)
+       noisy_meas = zeros(size(true_meas));
+       for j = 1:length(true_meas(1,:))
+           rand_j = randn([3,1]);
+           measurement_noise_j = cholR*rand_j;
+           noisy_meas(:,j) = true_meas(:,j) + [measurement_noise_j;0];
+       end
+   else
+       noisy_meas = [];
+   end
+    
+    %store previous state and measurement
+    Y_sim{num_points+1} = noisy_meas;
 end
 
 function Xdot = noisy_EOM(t,X,w)
