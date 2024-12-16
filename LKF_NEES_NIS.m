@@ -1,4 +1,5 @@
-
+close all
+clc
 %% NEES/NIS Testing
 load('Rtrue.csv');
 load('Qtrue.csv');
@@ -10,7 +11,7 @@ P_plus = 10*[[1 0 0 0];
             [0 0 0 0.001]]; %initial state error covariance matrix
 
 alpha=0.05;
-tuner = 1000;%logspace(-5,5,20);
+tuner = logspace(6.14,6.145,10);
 for j=1:length(tuner)
     
     Q = tuner(j)*Qtrue;
@@ -31,7 +32,7 @@ for j=1:length(tuner)
         
     end
     Eps_bar_x = Eps_bar_x/N;
-    Eps_bar_x_avg = sum(Eps_bar_x)/length(Eps_bar_x);
+    Eps_bar_x_avg = sum(Eps_bar_x)/length(Eps_bar_x)
     
     Eps_Q_test(j) = Eps_bar_x_avg;
 
@@ -53,11 +54,13 @@ for j=1:length(tuner)
         disp(Q)
     end
     
-    figure()
+    figure(j)
     hold on
     plot(Eps_bar_x,"bo")
-    plot(r1*ones(size(Eps_bar_x)),"b--")
-    plot(r2*ones(size(Eps_bar_x)),"b--")
+    plot(r1*ones(size(Eps_bar_x)),"r--")
+    plot(r2*ones(size(Eps_bar_x)),"r--")
+    ylim([0 100]);
+    hold off
     
 %     if (N*Eps_bar_x_avg >= r1*N) && (N*Eps_bar_x_avg <= r2*N)
 %         disp("KF passes chi-square test for Q:")
