@@ -1,72 +1,123 @@
 close all
-clc
+
 %% NEES/NIS Testing
 load('Rtrue.csv');
 load('Qtrue.csv');
 
-R = 1e9*Rtrue;
+R = 1e2*Rtrue;
 P_plus = 10*[[1 0 0 0];
             [0 0.001 0 0];
             [0 0 1 0];
             [0 0 0 0.001]]; %initial state error covariance matrix
 
 alpha=0.05;
-tuner = logspace(6.14,6.145,10);
+
+% 2335721.46909012
+
+tuner = logspace(0,15,20);%linspace(2198392.64886229,2.2e6,20);%logspace(6,6.5,20);%logspace(6.14,6.145,10);
+Eps_bar_x_avg = zeros([1,length(tuner)]);
+Eps_bar_y_avg = zeros([1,length(tuner)]);
 for j=1:length(tuner)
     
     Q = tuner(j)*Qtrue;
 
     Eps_x = zeros(length(x_true)-1,1);
     Eps_bar_x = zeros(length(x_true)-1,1);
+    Eps_bar_y = zeros(length(x_true)-1,1);
     
-    for N=1:30
+    for N=1:20
         [x_true,ydata] = SimulateData(Qtrue,Rtrue,P_plus,xnom0,dt,num_points);
-        [dX_LKF, X_LKF, sigma_LKF,Pk_LKF] = LKFfunc(ydata,Q,R,P_plus,dx_plus);
+        [dX_LKF, X_LKF, sigma_LKF,Pk_LKF,eps_y] = LKFfunc(ydata,Q,R,P_plus,dx_plus);
         e_x = x_true - X_LKF;
-
+        
         for i=1:length(e_x)-1
             P_k = Pk_LKF(:,4*k-3:4*k);
             Eps_x(i) = e_x(:,i)'*((P_k)\e_x(:,i));
             Eps_bar_x(i) = Eps_x(i)+Eps_bar_x(i);
+            Eps_bar_y(i) = eps_y(i)+Eps_bar_y(i);
         end
         
     end
     Eps_bar_x = Eps_bar_x/N;
-    Eps_bar_x_avg = sum(Eps_bar_x)/length(Eps_bar_x)
+    Eps_bar_y = Eps_bar_y/N;
+   
     
-    Eps_Q_test(j) = Eps_bar_x_avg;
+    Eps_bar_x_avg(j) = sum(Eps_bar_x)/length(Eps_bar_x);
+    Eps_bar_y_avg(j) = sum(Eps_bar_y)/length(Eps_bar_y);
+    
+    
+    %Eps_Q_test(j) = Eps_bar_x_avg;
+    
 
-    r1 = chi2inv(alpha/2,N*4)./N;
-    r2 = chi2inv(1-alpha/2,N*4)./N;
+    r1_x = chi2inv(alpha/2,N*4)./N;
+    r2_x = chi2inv(1-alpha/2,N*4)./N;
+    r1_y = chi2inv(alpha/2,N*3)./N;
+    r2_y = chi2inv(1-alpha/2,N*3)./N;
 
-    num_passes = 0;
+    num_passes_x = 0;
 
     for Eps_barx_k = Eps_bar_x'
-        if (N*Eps_barx_k >= r1*N) && (N*Eps_barx_k <= r2*N)
-            num_passes = num_passes+1;
+        if (N*Eps_barx_k >= r1_x*N) && (N*Eps_barx_k <= r2_x*N)
+            num_passes_x = num_passes_x+1;
         end
     end
-
-    proportion_failed = 1 - num_passes/num_points;
+    
+    proportion_failed = 1 - num_passes_x/num_points;
 
     if proportion_failed < alpha
-        disp("KF passes chi-square test for Q:")
+        disp("KF passes NEES chi-square test for Q:")
         disp(Q)
     end
     
-    figure(j)
-    hold on
-    plot(Eps_bar_x,"bo")
-    plot(r1*ones(size(Eps_bar_x)),"r--")
-    plot(r2*ones(size(Eps_bar_x)),"r--")
-    ylim([0 100]);
-    hold off
+%     figure()
+%     hold on
+%     plot(Eps_bar_x,"bo")
+%     plot(r1_x*ones(size(Eps_bar_x)),"r--")
+%     plot(r2_x*ones(size(Eps_bar_x)),"r--")
+%     ylim([0 100]);
+%     title('NEES Chi-Squared Test')
+%     hold off
+    
+
+    %%% NIS
+    num_passes_y = 0;
+
+    for Eps_bary_k = Eps_bar_y'
+        if (N*Eps_bary_k >= r1_y*N) && (N*Eps_bary_k <= r2_y*N)
+            num_passes_y = num_passes_y+1;
+        end
+    end
+    
+    proportion_failed = 1 - num_passes_y/num_points;
+
+    if proportion_failed < alpha
+        disp("KF passes NIS chi-square test for Q:")
+        disp(Q)
+    end
+    
+%     figure()
+%     hold on
+%     plot(Eps_bar_y,"bo")
+%     plot(r1_y*ones(size(Eps_bar_y)),"r--")
+%     plot(r2_y*ones(size(Eps_bar_y)),"r--")
+%     ylim([0 100]);
+%     title('NIS Chi-Squared Test')
+%     hold off
+    
+
     
 %     if (N*Eps_bar_x_avg >= r1*N) && (N*Eps_bar_x_avg <= r2*N)
 %         disp("KF passes chi-square test for Q:")
 %         disp(Q)
 %     end
 end
+
+figure()
+semilogy(1:j,Eps_bar_x_avg,"-o")
+
+figure()
+semilogy(1:j,Eps_bar_y_avg,"-o")
+
 
 function meas = h(i,x,t)
     %extract state info

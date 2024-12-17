@@ -21,7 +21,7 @@ x0 = xnom0+dx; %initial state
 
 %Initial values for LKF
 Q = 1000*Qtrue; %1000 works good
-R = 1e9*Rtrue; %1e9 works good
+R = Rtrue; %1e9 works good
 %Q = 0*Qtrue;
 
 P_plus=10*[[1 0 0 0];
