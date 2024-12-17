@@ -1,10 +1,7 @@
-clear
-clc
-close all
+function  [x_true, ydata, X_EKF, sigma_EKF,Pk_EKF,eps_y] = EKF(Q,R,P0)
 
 load('Rtrue.csv');
 load('Qtrue.csv');
-%load('orbitdeterm_finalproj_KFdata.mat');
 
 %Define important constants
 r0 = 6678; %[km] nominal orbit radius
@@ -18,15 +15,12 @@ omega_E = 2*pi/86400; %[rad/s] angular velocity of the earth
 dx = [0;0.075;0;-0.021]; %initial state perturbation
 Xnom0 = [r0;0;0;omega0*r0]; %initial nominal state
 
-%Initial values for LKF
-Q = Qtrue; %1000 works good
-R = Rtrue; %1e9 works good
-%Q = 0*Qtrue;
 
-P_plus= 10*[[1 0 0 0];
-          [0 0.001 0 0];
-          [0 0 1 0];
-          [0 0 0 0.001]]; %initial state error covariance matrix
+
+
+%Initial values for LKF
+
+P_plus = P0;
 x_plus =  Xnom0; %initial state
 
 %%%Integrate non-linear EOM for true state values
@@ -43,7 +37,8 @@ ytrue = zeros([4,num_points]);
 X_EKF = zeros([4,num_points]);
 sigma_EKF = zeros([4,num_points]);
 yest = zeros([4,num_points]);
-
+eps_y = zeros([1,length(ydata)]);
+Pk_EKF = zeros([4,4*num_points]);
 
 %%%Use discrete time linearized dynamics to estimate state values over time
 
@@ -54,14 +49,14 @@ for k = 0:1400
     %store values of LKF stuff
     X_EKF(:,k+1) = x_plus;
     sigma_EKF(:,k+1) = 2*sqrt(diag(P_plus));
-    
+    Pk_EKF(:,4*k+1:4*k+4) = P_plus;
     %Calculate partial derivatives for dynamics jacobian evaluated on
     %nominal trajectory at the current time
     Xnow = x_plus(1);
     Xnow_dot = x_plus(2);
     Ynow = x_plus(3);
     Ynow_dot = x_plus(4);
-    rnow = sqrt(Xnow^2+Ynow)^2;
+    rnow = sqrt(Xnow^2+Ynow^2);
     dxdot_dx = mu*(2*Xnow^2 - Ynow^2)/(rnow^5);
     dxdot_dy = 3*mu*Xnow*Ynow/(rnow^5);
     dydot_dy = mu*(2*Ynow^2 - Xnow^2)/(rnow^5);
@@ -167,16 +162,20 @@ for k = 0:1400
         x_plus = x_minus + K*(Y_vect-Yhat);
         P_plus = (eye(4) - K*H)*P_minus;
 
+        e_y = Y_vect-Yhat;
+        eps_y(k+1) = e_y'*((H*P_minus*H' + Rk/1e6)\e_y);
     else
         %%%Time Update Step
         %dx_plus = Ft*dx_plus;
         [~,x_traj] = ode45(@(t,x) noisy_EOM(t,x,[0;0]),[0 dt],x_plus,options); 
         x_plus = x_traj(end,:)';
         P_plus = Ft*P_plus*Ft' + Omegat*Q*Omegat';
+
     end
 
 end
 
+%{
 
 % Average perturbation errors between perturbation est and LKF
 XEKF_error = sum(abs(Xtrue-X_EKF(1,:)))/length(Xtrue)
@@ -411,6 +410,8 @@ for i = 1:12
 end
 
 %}
+%}
+end
 
 function meas = h(i,x,t)
     %extract state info

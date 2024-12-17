@@ -16,7 +16,7 @@ alpha=0.05;
 % 2335721.46909012
 
 %%REMOVE THIS OR IT WILL TAKE A LONG TIME
-tuner = logspace(5,6,2);%linspace(2198392.64886229,2.2e6,20);%logspace(6,6.5,20);%logspace(6.14,6.145,10);
+tuner = logspace(5,7,5);%linspace(2198392.64886229,2.2e6,20);%logspace(6,6.5,20);%logspace(6.14,6.145,10);
 Eps_bar_x_avg = zeros([1,length(tuner)]);
 Eps_bar_y_avg = zeros([1,length(tuner)]);
 for j=1:length(tuner)
@@ -66,7 +66,7 @@ for j=1:length(tuner)
     end
     
     proportion_failed = 1 - num_passes_x/num_points;
-    succ_rate_x = 100*(num_passes_x/num_points);
+    succ_rate_x = num_passes_x/num_points;
     disp(['NEES success rate: ', num2str(succ_rate_x)])
 
     if proportion_failed < alpha
@@ -80,7 +80,7 @@ for j=1:length(tuner)
     plot(r1_x*ones(size(Eps_bar_x)),"r--")
     plot(r2_x*ones(size(Eps_bar_x)),"r--")
     ylim([0 100]);
-    text(800, 80, sprintf('Success rate: %i%%', round(succ_rate_x)), 'FontSize', 12, 'Color', 'black');
+    text(5, 10, sprintf('The value of myVar is: %d', myVar), 'FontSize', 12, 'Color', 'blue');
     title('NEES Chi-Squared Test')
     hold off
     
@@ -95,7 +95,7 @@ for j=1:length(tuner)
     end
     
     proportion_failed = 1 - num_passes_y/num_points;
-    succ_rate_y = (num_passes_y/num_points)*100;
+    succ_rate_y = num_passes_y/num_points;
     disp(['NIS success rate: ', num2str(succ_rate_y)])
 
     if proportion_failed < alpha
@@ -109,7 +109,6 @@ for j=1:length(tuner)
     plot(r1_y*ones(size(Eps_bar_y)),"r--")
     plot(r2_y*ones(size(Eps_bar_y)),"r--")
     ylim([0 100]);
-    text(800, 80, sprintf('Success rate: %i%%', round(succ_rate_y)), 'FontSize', 12, 'Color', 'black');
     title('NIS Chi-Squared Test')
     hold off
     
