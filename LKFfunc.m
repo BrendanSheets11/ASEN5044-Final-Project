@@ -1,4 +1,4 @@
-function [dX_LKF, X_LKF, sigma_LKF,Pk_LKF] = LKFfunc(ydata,Q,Rtrue,P0,dx0)
+function [dX_LKF, X_LKF, sigma_LKF,Pk_LKF,eps_y] = LKFfunc(ydata,Q,Rtrue,P0,dx0)
 r0 = 6678; %[km] nominal orbit radius
 mu = 398600; %[km^3/s^2] gravitational parameter
 omega0 = sqrt(mu/r0^3); %[rad/s] nominal orbit velocity
@@ -11,6 +11,7 @@ dX_LKF = zeros([4,length(ydata)]);
 X_LKF = zeros([4,length(ydata)]);
 sigma_LKF = zeros([4,length(ydata)]);
 Pk_LKF = zeros([4,4*length(ydata)]);
+eps_y = zeros([1,length(ydata)]);
 
 P_plus = P0;
 dx_plus = dx0;
@@ -130,7 +131,9 @@ for k = 0:1399
         %%%Measurement Update Step
         dx_plus = dx_minus + K*(Y_vect-H*dx_minus);
         P_plus = (eye(4) - K*H)*P_minus;
-
+        
+        eps_y(k+1) = Y_vect'*((H*P_minus*H' + R)\Y_vect);
+        
     else
         %%%Time Update Step
         dx_plus = Ft*dx_plus;
