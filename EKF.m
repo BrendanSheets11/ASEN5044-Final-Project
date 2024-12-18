@@ -19,8 +19,8 @@ dx = [0;0.075;0;-0.021]; %initial state perturbation
 Xnom0 = [r0;0;0;omega0*r0]; %initial nominal state
 
 %Initial values for LKF
-Q = Qtrue; %1000 works good
-R = Rtrue; %1e9 works good
+Q = 100000*Qtrue; %1000 works good
+R = 1000000*Rtrue; %1e9 works good
 %Q = 0*Qtrue;
 
 P_plus= 10*[[1 0 0 0];
@@ -34,6 +34,7 @@ x_plus =  Xnom0; %initial state
 % [t,x_true] = ode45(@(t,x) EOM(t,x),time,x0,options); 
 num_points = 1401;
 [x_true,ydata] = SimulateData(Qtrue,Rtrue,P_plus,Xnom0,dt,num_points);
+
 Xtrue = x_true(1,:);
 Xdot_true = x_true(2,:);
 Ytrue = x_true(3,:);
@@ -61,7 +62,8 @@ for k = 0:1400
     Xnow_dot = x_plus(2);
     Ynow = x_plus(3);
     Ynow_dot = x_plus(4);
-    rnow = sqrt(Xnow^2+Ynow)^2;
+
+    rnow = sqrt(Xnow^2+Ynow^2);
     dxdot_dx = mu*(2*Xnow^2 - Ynow^2)/(rnow^5);
     dxdot_dy = 3*mu*Xnow*Ynow/(rnow^5);
     dydot_dy = mu*(2*Ynow^2 - Xnow^2)/(rnow^5);
@@ -145,7 +147,6 @@ for k = 0:1400
 
         P_minus = Ft*P_plus*Ft' + Omegat*Q*Omegat';
         K = P_minus*H'/(H*P_minus*H' + Rk);
-      
     
         %%%Measurement Update Step
         Yhat = zeros([3*length(indices),1]); %estimated measurements of current state
@@ -303,32 +304,32 @@ title("Approximate Errors vs. Time")
 xlabel("Time (secs)")
 ylabel("\deltaX (km)")
 plot(time(start:end),x_true(1,start:end)-X_EKF(1,start:end),"b");
-% plot(time(start:end),sigma_EKF(1,start:end),"r--");
-% plot(time(start:end),-sigma_EKF(1,start:end),"r--");
+plot(time(start:end),sigma_EKF(1,start:end),"r--");
+plot(time(start:end),-sigma_EKF(1,start:end),"r--");
 subplot(4,1,2)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaXdot (km/s)")
 
 plot(time(start:end),x_true(2,start:end)-X_EKF(2,start:end),"b");
-% plot(time(start:end),sigma_EKF(2,start:end),"r--");
-% plot(time(start:end),-sigma_EKF(2,start:end),"r--");
+plot(time(start:end),sigma_EKF(2,start:end),"r--");
+plot(time(start:end),-sigma_EKF(2,start:end),"r--");
 
 subplot(4,1,3)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaY (km)")
 plot(time(start:end),x_true(3,start:end)-X_EKF(3,start:end),"b");
-% plot(time(start:end),sigma_EKF(3,start:end),"r--");
-% plot(time(start:end),-sigma_EKF(3,start:end),"r--");
+plot(time(start:end),sigma_EKF(3,start:end),"r--");
+plot(time(start:end),-sigma_EKF(3,start:end),"r--");
 subplot(4,1,4)
 hold on
 xlabel("Time (secs)")
 ylabel("\deltaYdot (km/s)")
 
 plot(time(start:end),x_true(4,start:end)-X_EKF(4,start:end),"b");
-% plot(time(start:end),sigma_EKF(4,start:end),"r--");
-% plot(time(start:end),-sigma_EKF(4,start:end),"r--");
+plot(time(start:end),sigma_EKF(4,start:end),"r--");
+plot(time(start:end),-sigma_EKF(4,start:end),"r--");
 
 %Plot true measurements
 % figure(2)
