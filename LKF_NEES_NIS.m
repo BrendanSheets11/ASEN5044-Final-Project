@@ -5,7 +5,8 @@ close all
 load('Rtrue.csv');
 load('Qtrue.csv');
 
-R = 1e6*Rtrue;
+dx = [0,0,0,0];%[0;0.075;0;-0.021]; %initial state perturbation
+R = 1e9*Rtrue;
 P_plus = 10*[[1 0 0 0];
             [0 0.001 0 0];
             [0 0 1 0];
@@ -13,10 +14,10 @@ P_plus = 10*[[1 0 0 0];
 
 alpha=0.05;
 
-% 2335721.46909012
-
+%830217.568131974
+%9.54095476349996e+18
 %%REMOVE THIS OR IT WILL TAKE A LONG TIME
-tuner = logspace(5,6,2);%linspace(2198392.64886229,2.2e6,20);%logspace(6,6.5,20);%logspace(6.14,6.145,10);
+tuner = logspace(0,18,50);%830217.568131974;%818040.201005025;%linspace(8.1e5,8.5e5,200);%%linspace(2198392.64886229,2.2e6,20);%logspace(6,6.5,20);%logspace(6.14,6.145,10);
 Eps_bar_x_avg = zeros([1,length(tuner)]);
 Eps_bar_y_avg = zeros([1,length(tuner)]);
 for j=1:length(tuner)
@@ -27,14 +28,16 @@ for j=1:length(tuner)
     Eps_bar_x = zeros(length(x_true)-1,1);
     Eps_bar_y = zeros(length(x_true)-1,1);
     
-    for N=1:20
-        %[x_true,ydata] = SimulateData(Qtrue,Rtrue,P_plus,xnom0,dt,num_points);
-        %[dX_LKF, X_LKF, sigma_LKF,Pk_LKF,eps_y] = LKFfunc(ydata,Q,R,P_plus,dx_plus);
-        [x_true,EKF_ydata,X_EKF, sigma_EKF,Pk_EKF,eps_y] = EKF(Q,R,P_plus);
-        e_x = x_true - X_EKF;
+    for N=1:100
+        [x_true,ydata] = SimulateData(Qtrue,Rtrue,P_plus,xnom0,dt,num_points);
+        [dX_LKF, X_LKF, sigma_LKF,Pk_LKF,eps_y] = LKFfunc(ydata,Q,R,P_plus,dx);
+        %[x_true,EKF_ydata,X_EKF, sigma_EKF,Pk_EKF,eps_y] = EKF(Q,R,P_plus);
+        e_x = x_true - X_LKF;
+        %e_x = x_true - X_EKF;
         
         for i=1:length(e_x)-1
-            P_k = Pk_EKF(:,4*k-3:4*k);
+            P_k = Pk_LKF(:,4*k-3:4*k);
+            %P_k = Pk_EKF(:,4*k-3:4*k);
             Eps_x(i) = e_x(:,i)'*((P_k)\e_x(:,i));
             Eps_bar_x(i) = Eps_x(i)+Eps_bar_x(i);
             Eps_bar_y(i) = eps_y(i)+Eps_bar_y(i);
@@ -67,6 +70,7 @@ for j=1:length(tuner)
     
     proportion_failed = 1 - num_passes_x/num_points;
     succ_rate_x = 100*(num_passes_x/num_points);
+    disp(['Trial: ', num2str(j), ', Qtuning = ',num2str(tuner(j))])
     disp(['NEES success rate: ', num2str(succ_rate_x)])
 
     if proportion_failed < alpha
@@ -74,15 +78,15 @@ for j=1:length(tuner)
         disp(Q)
     end
     
-    figure()
-    hold on
-    plot(Eps_bar_x,"bo")
-    plot(r1_x*ones(size(Eps_bar_x)),"r--")
-    plot(r2_x*ones(size(Eps_bar_x)),"r--")
-    ylim([0 100]);
-    text(800, 80, sprintf('Success rate: %i%%', round(succ_rate_x)), 'FontSize', 12, 'Color', 'black');
-    title('NEES Chi-Squared Test')
-    hold off
+%     figure()
+%     hold on
+%     plot(Eps_bar_x,"bo")
+%     plot(r1_x*ones(size(Eps_bar_x)),"r--")
+%     plot(r2_x*ones(size(Eps_bar_x)),"r--")
+%     ylim([0 100]);
+%     text(800, 80, sprintf('Success rate: %i%%', round(succ_rate_x)), 'FontSize', 12, 'Color', 'black');
+%     title('NEES Chi-Squared Test')
+%     hold off
     
 
     %%% NIS
@@ -103,15 +107,15 @@ for j=1:length(tuner)
         disp(Q)
     end
     
-    figure()
-    hold on
-    plot(Eps_bar_y,"bo")
-    plot(r1_y*ones(size(Eps_bar_y)),"r--")
-    plot(r2_y*ones(size(Eps_bar_y)),"r--")
-    ylim([0 100]);
-    text(800, 80, sprintf('Success rate: %i%%', round(succ_rate_y)), 'FontSize', 12, 'Color', 'black');
-    title('NIS Chi-Squared Test')
-    hold off
+%     figure()
+%     hold on
+%     plot(Eps_bar_y,"bo")
+%     plot(r1_y*ones(size(Eps_bar_y)),"r--")
+%     plot(r2_y*ones(size(Eps_bar_y)),"r--")
+%     ylim([0 100]);
+%     text(800, 80, sprintf('Success rate: %i%%', round(succ_rate_y)), 'FontSize', 12, 'Color', 'black');
+%     title('NIS Chi-Squared Test')
+%     hold off
     
 
     
@@ -121,11 +125,11 @@ for j=1:length(tuner)
 %     end
 end
 
-% figure()
-% semilogy(1:j,Eps_bar_x_avg,"-o")
-% 
-% figure()
-% semilogy(1:j,Eps_bar_y_avg,"-o")
+figure()
+semilogy(1:j,Eps_bar_x_avg,"-o")
+
+figure()
+semilogy(1:j,Eps_bar_y_avg,"-o")
 
 
 function meas = h(i,x,t)

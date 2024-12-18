@@ -54,7 +54,8 @@ for k = 0:1399
     %CT Perturbation Disturbance Affect matrix
     Gamma_bar = [[0 1 0 0]; [0 0 0 1]]';
 
-    Ft = eye(4)+dt*A_bar; %Ahat(1:4,1:4); %DT state transition matrix at time t
+    % New calc for Ft
+    Ft = expm(dt*A_bar);%eye(4)+dt*A_bar; %Ahat(1:4,1:4); %DT state transition matrix at time t %%
     Omegat = dt*Gamma_bar;
    
     %%%Calculate Linearized Measurements
@@ -125,7 +126,7 @@ for k = 0:1399
         dx_minus = Ft*dx_plus;
         P_minus = Ft*P_plus*Ft' + Omegat*Q*Omegat';
         K = P_minus*H'/(H*P_minus*H' + R);
- 
+
         %dyest(:,k+1) = [H(1:3,1:4)*dx_minus;indices(1)];
     
         %%%Measurement Update Step

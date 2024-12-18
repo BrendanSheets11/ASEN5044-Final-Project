@@ -20,7 +20,7 @@ xnom0 = [r0;0;0;omega0*r0]; %initial nominal state
 x0 = xnom0+dx; %initial state
 
 %Initial values for LKF
-Q = 1000*Qtrue; %1000 works good
+Q = 830217.568131974*Qtrue; %1000 works good
 R = 1e9*Rtrue; %1e9 works good
 %Q = 0*Qtrue;
 
