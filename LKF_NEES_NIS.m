@@ -5,7 +5,9 @@ close all
 load('Rtrue.csv');
 load('Qtrue.csv');
 
-dx = [0,0,0,0];%[0;0.075;0;-0.021]; %initial state perturbation
+dx0 = [0;0.075;0;-0.021]; %initial state perturbation
+xnom0 = [r0;0;0;omega0*r0]; %initial nominal state
+
 R = 1e9*Rtrue;
 P_plus = 10*[[1 0 0 0];
             [0 0.001 0 0];
@@ -17,7 +19,7 @@ alpha=0.05;
 %830217.568131974
 %9.54095476349996e+18
 %%REMOVE THIS OR IT WILL TAKE A LONG TIME
-tuner = logspace(0,18,50);%830217.568131974;%818040.201005025;%linspace(8.1e5,8.5e5,200);%%linspace(2198392.64886229,2.2e6,20);%logspace(6,6.5,20);%logspace(6.14,6.145,10);
+tuner = logspace(0,18,5);%830217.568131974;%818040.201005025;%linspace(8.1e5,8.5e5,200);%%linspace(2198392.64886229,2.2e6,20);%logspace(6,6.5,20);%logspace(6.14,6.145,10);
 Eps_bar_x_avg = zeros([1,length(tuner)]);
 Eps_bar_y_avg = zeros([1,length(tuner)]);
 for j=1:length(tuner)
@@ -29,8 +31,8 @@ for j=1:length(tuner)
     Eps_bar_y = zeros(length(x_true)-1,1);
     
     for N=1:100
-        [x_true,ydata] = SimulateData(Qtrue,Rtrue,P_plus,xnom0,dt,num_points);
-        [dX_LKF, X_LKF, sigma_LKF,Pk_LKF,eps_y] = LKFfunc(ydata,Q,R,P_plus,dx);
+        [x_true,ydata] = SimulateData(Qtrue,Rtrue,xnom0,dt,num_points,dx0);
+        [dX_LKF, X_LKF, sigma_LKF,Pk_LKF,eps_y] = LKFfunc(ydata,Q,R,P_plus,dx0);
         %[x_true,EKF_ydata,X_EKF, sigma_EKF,Pk_EKF,eps_y] = EKF(Q,R,P_plus);
         e_x = x_true - X_LKF;
         %e_x = x_true - X_EKF;
@@ -179,10 +181,9 @@ function valid_meas = all_measurements(x,t)
 
 end
 
-function [X_sim,Y_sim] = SimulateData(Qtrue,Rtrue,P0,Xnom0,dt,num_points)
+function [X_sim,Y_sim] = SimulateData(Qtrue,Rtrue,Xnom0,dt,num_points,dx0)
    
-   cholP = chol(P0,"lower");
-   noisy_state = cholP*randn([4,1]) + Xnom0;
+   noisy_state = dx0 + Xnom0;
    X_sim = zeros([4,num_points]);
    Y_sim = cell(1,num_points);
 
